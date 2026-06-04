@@ -17,15 +17,19 @@ const ROLE_STYLE: Record<UserRole, string> = {
 
 export default function Summary(): React.ReactElement {
   const dispatch = useAppDispatch();
-  const { summary, summaryLoading } = useAppSelector(s => s.bookings);
+  const { summary, summaryTotal, summaryTotalBookings, summaryLoading } = useAppSelector(s => s.bookings);
   const [page, setPage] = useState(1);
 
-  useEffect(() => { dispatch(fetchSummary()); }, [dispatch]);
+  const load = (p: number) => dispatch(fetchSummary({ page: p, pageSize: PAGE_SIZE }));
 
-  const totalBookings = summary.reduce((sum, u) => sum + u.totalBookings, 0);
-  const paginated = summary.slice((page - 1) * PAGE_SIZE, page * PAGE_SIZE);
+  useEffect(() => { load(1); }, [dispatch]);
 
-  if (summaryLoading) {
+  const handlePageChange = (p: number) => {
+    setPage(p);
+    load(p);
+  };
+
+  if (summaryLoading && summary.length === 0) {
     return <div className="text-center py-12 text-gray-400">Loading summary...</div>;
   }
 
@@ -33,11 +37,11 @@ export default function Summary(): React.ReactElement {
     <div className="space-y-6">
       <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
         {[
-          { label: 'Total Bookings', value: totalBookings },
-          { label: 'Total Users', value: summary.length },
+          { label: 'Total Bookings', value: summaryTotalBookings },
+          { label: 'Total Users', value: summaryTotal },
           {
             label: 'Avg Bookings / User',
-            value: summary.length > 0 ? (totalBookings / summary.length).toFixed(1) : '0',
+            value: summaryTotal > 0 ? (summaryTotalBookings / summaryTotal).toFixed(1) : '0',
           },
         ].map(({ label, value }) => (
           <div key={label} className="bg-white rounded-xl border border-gray-200 p-5">
@@ -50,17 +54,17 @@ export default function Summary(): React.ReactElement {
       <div className="bg-white rounded-xl border border-gray-200">
         <div className="p-6 border-b border-gray-100 flex items-center justify-between">
           <h2 className="text-lg font-semibold text-gray-800">Bookings by User</h2>
-          <button onClick={() => dispatch(fetchSummary())} className="text-sm text-blue-600 hover:underline">
+          <button onClick={() => { setPage(1); load(1); }} className="text-sm text-blue-600 hover:underline">
             Refresh
           </button>
         </div>
 
-        {summary.length === 0 ? (
+        {summaryTotal === 0 ? (
           <div className="text-center py-8 text-gray-400">No data available.</div>
         ) : (
           <>
             <div className="divide-y divide-gray-100">
-              {paginated.map(u => (
+              {summary.map(u => (
                 <div key={u.userId} className="p-4">
                   <div className="flex items-center justify-between mb-2">
                     <div className="flex items-center gap-2">
@@ -92,7 +96,7 @@ export default function Summary(): React.ReactElement {
                 </div>
               ))}
             </div>
-            <Pagination total={summary.length} page={page} pageSize={PAGE_SIZE} onPageChange={setPage} />
+            <Pagination total={summaryTotal} page={page} pageSize={PAGE_SIZE} onPageChange={handlePageChange} />
           </>
         )}
       </div>

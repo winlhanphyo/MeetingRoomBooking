@@ -4,22 +4,26 @@ import type { UserDto, UserRole } from '../types';
 
 interface UserState {
   list: UserDto[];
+  total: number;
   loading: boolean;
   error: string | null;
 }
 
-const initialState: UserState = { list: [], loading: false, error: null };
+const initialState: UserState = { list: [], total: 0, loading: false, error: null };
 
 const extractError = (err: unknown, fallback: string): string =>
   (err as { response?: { data?: { error?: string } } }).response?.data?.error ?? fallback;
 
-export const fetchUsers = createAsyncThunk('users/fetchAll', async (_, { rejectWithValue }) => {
-  try {
-    return (await api.getUsers()).data;
-  } catch (err) {
-    return rejectWithValue(extractError(err, 'Failed to fetch users.'));
+export const fetchUsers = createAsyncThunk(
+  'users/fetchAll',
+  async (params: { page: number; pageSize: number }, { rejectWithValue }) => {
+    try {
+      return (await api.getUsers(params.page, params.pageSize)).data;
+    } catch (err) {
+      return rejectWithValue(extractError(err, 'Failed to fetch users.'));
+    }
   }
-});
+);
 
 export const addUser = createAsyncThunk(
   'users/create',
@@ -61,16 +65,17 @@ const userSlice = createSlice({
   extraReducers: (builder) => {
     builder
       .addCase(fetchUsers.pending, (state) => { state.loading = true; state.error = null; })
-      .addCase(fetchUsers.fulfilled, (state, { payload }) => { state.loading = false; state.list = payload; })
+      .addCase(fetchUsers.fulfilled, (state, { payload }) => {
+        state.loading = false;
+        state.list = payload.data;
+        state.total = payload.total;
+      })
       .addCase(fetchUsers.rejected, (state, { payload }) => { state.loading = false; state.error = payload as string; })
 
       .addCase(addUser.pending, (state) => { state.loading = true; state.error = null; })
-      .addCase(addUser.fulfilled, (state, { payload }) => { state.loading = false; state.list.push(payload); })
+      .addCase(addUser.fulfilled, (state) => { state.loading = false; })
       .addCase(addUser.rejected, (state, { payload }) => { state.loading = false; state.error = payload as string; })
 
-      .addCase(removeUser.fulfilled, (state, { payload }) => {
-        state.list = state.list.filter(u => u.id !== payload);
-      })
       .addCase(removeUser.rejected, (state, { payload }) => { state.error = payload as string; })
 
       .addCase(changeUserRole.fulfilled, (state, { payload }) => {

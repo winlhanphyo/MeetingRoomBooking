@@ -1,6 +1,8 @@
 import React, { useState } from 'react';
 import { useAppDispatch, useAppSelector } from '../store/hooks';
-import { addBooking, clearBookingError } from '../store/bookingSlice';
+import { addBooking, clearBookingError, fetchBookings } from '../store/bookingSlice';
+
+const PAGE_SIZE = 5;
 
 const toDatetimeLocal = (date: Date): string => {
   const d = new Date(date);
@@ -41,6 +43,7 @@ export default function BookingForm(): React.ReactElement {
     if (result.meta.requestStatus === 'fulfilled') {
       setSuccess(true);
       setTimeout(() => setSuccess(false), 3000);
+      dispatch(fetchBookings({ page: 1, pageSize: PAGE_SIZE }));
     }
   };
 

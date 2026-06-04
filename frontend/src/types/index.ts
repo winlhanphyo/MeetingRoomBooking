@@ -23,3 +23,15 @@ export interface SummaryItem {
   totalBookings: number;
   bookings: BookingDto[];
 }
+
+export interface PagedResponse<T> {
+  data: T[];
+  total: number;
+  page: number;
+  pageSize: number;
+  totalPages: number;
+}
+
+export interface SummaryPagedResponse extends PagedResponse<SummaryItem> {
+  totalBookings: number;
+}

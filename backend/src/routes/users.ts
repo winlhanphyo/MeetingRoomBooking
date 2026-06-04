@@ -20,14 +20,26 @@ router.get('/select', async (_req: Request, res: Response): Promise<void> => {
   }
 });
 
-// Admin: list all users with timestamps
-router.get('/', authenticate, requireRole('admin'), async (_req: Request, res: Response): Promise<void> => {
+// Admin: list all users with timestamps — GET /api/users?page=1&pageSize=5
+router.get('/', authenticate, requireRole('admin'), async (req: Request, res: Response): Promise<void> => {
   try {
-    const users = await User.findAll({
+    const page     = Math.max(1, parseInt(String(req.query.page     ?? 1),  10) || 1);
+    const pageSize = Math.min(100, Math.max(1, parseInt(String(req.query.pageSize ?? 10), 10) || 10));
+
+    const { count, rows } = await User.findAndCountAll({
       attributes: ['id', 'name', 'role', 'createdAt'],
       order: [['id', 'ASC']],
+      limit: pageSize,
+      offset: (page - 1) * pageSize,
     });
-    res.json(users);
+
+    res.json({
+      data: rows,
+      total: count,
+      page,
+      pageSize,
+      totalPages: Math.ceil(count / pageSize),
+    });
   } catch {
     res.status(500).json({ error: 'Failed to fetch users.' });
   }

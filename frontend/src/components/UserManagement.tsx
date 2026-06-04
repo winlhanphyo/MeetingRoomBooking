@@ -17,7 +17,7 @@ const ROLES: UserRole[] = ['admin', 'owner', 'user'];
 
 export default function UserManagement(): React.ReactElement {
   const dispatch = useAppDispatch();
-  const { list, loading, error } = useAppSelector(s => s.users);
+  const { list, total, loading, error } = useAppSelector(s => s.users);
   const currentUser = useAppSelector(s => s.auth.currentUser);
 
   const [name, setName] = useState('');
@@ -29,10 +29,14 @@ export default function UserManagement(): React.ReactElement {
   const [success, setSuccess] = useState<string | null>(null);
   const [page, setPage] = useState(1);
 
-  useEffect(() => { dispatch(fetchUsers()); }, [dispatch]);
+  const load = (p: number) => dispatch(fetchUsers({ page: p, pageSize: PAGE_SIZE }));
 
-  // Reset to page 1 when the list length changes (after create/delete)
-  useEffect(() => { setPage(1); }, [list.length]);
+  useEffect(() => { load(1); }, [dispatch]);
+
+  const handlePageChange = (p: number) => {
+    setPage(p);
+    load(p);
+  };
 
   const checkDuplicate = (value: string): void => {
     const trimmed = value.trim().toLowerCase();
@@ -66,6 +70,8 @@ export default function UserManagement(): React.ReactElement {
       setNameError(null);
       setSuccess(`User "${created.name}" created.`);
       setTimeout(() => setSuccess(null), 3000);
+      setPage(1);
+      load(1);
     } else {
       setCreateError(result.payload as string);
     }
@@ -75,7 +81,13 @@ export default function UserManagement(): React.ReactElement {
     setDeleteError(null);
     if (!window.confirm(`Delete "${user.name}"? All their bookings will also be deleted.`)) return;
     const result = await dispatch(removeUser(user.id));
-    if (result.meta.requestStatus === 'rejected') setDeleteError(result.payload as string);
+    if (result.meta.requestStatus === 'rejected') {
+      setDeleteError(result.payload as string);
+    } else {
+      const newPage = list.length === 1 && page > 1 ? page - 1 : page;
+      setPage(newPage);
+      load(newPage);
+    }
   };
 
   const handleRoleChange = async (userId: number, newRole: UserRole): Promise<void> => {
@@ -143,7 +155,7 @@ export default function UserManagement(): React.ReactElement {
         <div className="p-6 border-b border-gray-100">
           <h2 className="text-lg font-semibold text-gray-800">
             All Users
-            <span className="ml-2 text-sm font-normal text-gray-400">({list.length})</span>
+            <span className="ml-2 text-sm font-normal text-gray-400">({total})</span>
           </h2>
         </div>
 
@@ -158,7 +170,7 @@ export default function UserManagement(): React.ReactElement {
         ) : (
           <>
             <div className="divide-y divide-gray-100">
-              {list.slice((page - 1) * PAGE_SIZE, page * PAGE_SIZE).map(user => (
+              {list.map(user => (
                 <div key={user.id} className="flex items-center justify-between p-4 hover:bg-gray-50">
                   <div className="flex items-center gap-3">
                     <div className="w-9 h-9 rounded-full bg-gray-200 flex items-center justify-center font-semibold text-gray-600 text-sm">
@@ -197,7 +209,7 @@ export default function UserManagement(): React.ReactElement {
                 </div>
               ))}
             </div>
-            <Pagination total={list.length} page={page} pageSize={PAGE_SIZE} onPageChange={setPage} />
+            <Pagination total={total} page={page} pageSize={PAGE_SIZE} onPageChange={handlePageChange} />
           </>
         )}
       </div>

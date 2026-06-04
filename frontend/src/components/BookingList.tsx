@@ -20,16 +20,20 @@ const duration = (start: string, end: string): string => {
 
 export default function BookingList(): React.ReactElement {
   const dispatch = useAppDispatch();
-  const { list, loading, error } = useAppSelector(s => s.bookings);
+  const { list, total, loading, error } = useAppSelector(s => s.bookings);
   const currentUser = useAppSelector(s => s.auth.currentUser);
   const [deleteError, setDeleteError] = useState<string | null>(null);
   const [deletingId, setDeletingId] = useState<number | null>(null);
   const [page, setPage] = useState(1);
 
-  useEffect(() => { dispatch(fetchBookings()); }, [dispatch]);
+  const load = (p: number) => dispatch(fetchBookings({ page: p, pageSize: PAGE_SIZE }));
 
-  // Reset to page 1 when the list length changes (after delete)
-  useEffect(() => { setPage(1); }, [list.length]);
+  useEffect(() => { load(1); }, [dispatch]);
+
+  const handlePageChange = (p: number) => {
+    setPage(p);
+    load(p);
+  };
 
   const canDelete = (booking: BookingDto): boolean => {
     if (!currentUser) return false;
@@ -56,22 +60,16 @@ export default function BookingList(): React.ReactElement {
     setDeletingId(booking.id);
     const result = await dispatch(removeBooking(booking.id));
     setDeletingId(null);
+
     if (result.meta.requestStatus === 'rejected') {
       setDeleteError(result.payload as string);
-      Swal.fire({
-        icon: 'error',
-        title: 'Delete failed',
-        text: result.payload as string,
-        confirmButtonColor: '#3b82f6',
-      });
+      Swal.fire({ icon: 'error', title: 'Delete failed', text: result.payload as string, confirmButtonColor: '#3b82f6' });
     } else {
-      Swal.fire({
-        icon: 'success',
-        title: 'Deleted',
-        text: 'The booking has been removed.',
-        timer: 1500,
-        showConfirmButton: false,
-      });
+      Swal.fire({ icon: 'success', title: 'Deleted', text: 'The booking has been removed.', timer: 1500, showConfirmButton: false });
+      // If deleting the last item on a non-first page, go back one page
+      const newPage = list.length === 1 && page > 1 ? page - 1 : page;
+      setPage(newPage);
+      load(newPage);
     }
   };
 
@@ -84,9 +82,9 @@ export default function BookingList(): React.ReactElement {
       <div className="flex items-center justify-between p-6 border-b border-gray-100">
         <h2 className="text-lg font-semibold text-gray-800">
           All Bookings
-          <span className="ml-2 text-sm font-normal text-gray-400">({list.length})</span>
+          <span className="ml-2 text-sm font-normal text-gray-400">({total})</span>
         </h2>
-        <button onClick={() => dispatch(fetchBookings())} className="text-sm text-blue-600 hover:underline">
+        <button onClick={() => { setPage(1); load(1); }} className="text-sm text-blue-600 hover:underline">
           Refresh
         </button>
       </div>
@@ -97,12 +95,12 @@ export default function BookingList(): React.ReactElement {
         </div>
       )}
 
-      {list.length === 0 ? (
+      {total === 0 ? (
         <div className="text-center py-12 text-gray-400">No bookings yet.</div>
       ) : (
         <>
           <div className="divide-y divide-gray-100">
-            {list.slice((page - 1) * PAGE_SIZE, page * PAGE_SIZE).map(booking => {
+            {list.map(booking => {
               const isPast = new Date(booking.endTime) < new Date();
               return (
                 <div
@@ -140,7 +138,7 @@ export default function BookingList(): React.ReactElement {
               );
             })}
           </div>
-          <Pagination total={list.length} page={page} pageSize={PAGE_SIZE} onPageChange={setPage} />
+          <Pagination total={total} page={page} pageSize={PAGE_SIZE} onPageChange={handlePageChange} />
         </>
       )}
     </div>

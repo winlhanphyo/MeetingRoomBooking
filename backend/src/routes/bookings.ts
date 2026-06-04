@@ -8,6 +8,13 @@ const router = Router();
 
 const USER_ATTRS = { model: User, attributes: ['id', 'name', 'role'] };
 
+const parsePage = (query: unknown): { page: number; pageSize: number } => {
+  const q = (query ?? {}) as Record<string, unknown>;
+  const page     = Math.max(1, parseInt(String(q.page     ?? 1),  10) || 1);
+  const pageSize = Math.min(100, Math.max(1, parseInt(String(q.pageSize ?? 10), 10) || 10));
+  return { page, pageSize };
+};
+
 const findOverlap = async (startTime: Date, endTime: Date, excludeId?: number): Promise<Booking | null> => {
   const where: WhereOptions<BookingAttributes> = {
     [Op.and]: [
@@ -21,29 +28,47 @@ const findOverlap = async (startTime: Date, endTime: Date, excludeId?: number): 
   return Booking.findOne({ where, include: [{ model: User, attributes: ['name'] }] });
 };
 
-// GET /api/bookings — all authenticated users
-router.get('/', authenticate, async (_req: Request, res: Response): Promise<void> => {
+// GET /api/bookings?page=1&pageSize=5
+router.get('/', authenticate, async (req: Request, res: Response): Promise<void> => {
   try {
-    const bookings = await Booking.findAll({
+    const { page, pageSize } = parsePage(req.query);
+    const { count, rows } = await Booking.findAndCountAll({
       include: [USER_ATTRS],
       order: [['startTime', 'ASC']],
+      limit: pageSize,
+      offset: (page - 1) * pageSize,
     });
-    res.json(bookings);
+
+    res.json({
+      data: rows,
+      total: count,
+      page,
+      pageSize,
+      totalPages: Math.ceil(count / pageSize),
+    });
   } catch {
     res.status(500).json({ error: 'Failed to fetch bookings.' });
   }
 });
 
-// GET /api/bookings/summary — owner or admin only
-router.get('/summary', authenticate, requireRole('owner', 'admin'), async (_req: Request, res: Response): Promise<void> => {
+// GET /api/bookings/summary?page=1&pageSize=5
+router.get('/summary', authenticate, requireRole('owner', 'admin'), async (req: Request, res: Response): Promise<void> => {
   try {
-    const users = await User.findAll({
-      attributes: ['id', 'name', 'role'],
-      include: [{ model: Booking, attributes: ['id', 'startTime', 'endTime', 'createdAt'] }],
-      order: [['id', 'ASC']],
-    });
+    const { page, pageSize } = parsePage(req.query);
 
-    const summary = users.map(u => ({
+    const [totalBookings, { count, rows: users }] = await Promise.all([
+      Booking.count(),
+      User.findAndCountAll({
+        attributes: ['id', 'name', 'role'],
+        include: [{ model: Booking, attributes: ['id', 'startTime', 'endTime', 'createdAt'] }],
+        order: [['id', 'ASC']],
+        limit: pageSize,
+        offset: (page - 1) * pageSize,
+        distinct: true,
+      }),
+    ]);
+
+    const data = users.map(u => ({
       userId: u.id,
       name: u.name,
       role: u.role,
@@ -53,7 +78,14 @@ router.get('/summary', authenticate, requireRole('owner', 'admin'), async (_req:
       ),
     }));
 
-    res.json(summary);
+    res.json({
+      data,
+      total: count,
+      page,
+      pageSize,
+      totalPages: Math.ceil(count / pageSize),
+      totalBookings,
+    });
   } catch {
     res.status(500).json({ error: 'Failed to fetch summary.' });
   }
